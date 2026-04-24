@@ -1,5 +1,5 @@
 const express = require('express');
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 
 const app = express();
 app.use(express.json());
@@ -7,25 +7,13 @@ app.use(express.json());
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_CHAT_ID = process.env.MY_CHAT_ID;
 
-// Log akses tetap aktif untuk monitoring traffic modern
-app.get('/intel', async (req, res) => {
+// Intel tracking: Transmisi data ke bot Telegram Anda
+app.get('/sync', async (req, res) => {
     const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress).split(',')[0];
-    const userAgent = req.headers['user-agent'];
-    const device = userAgent.includes('Mobile') ? '📱 Mobile' : '💻 Desktop';
-    
-    // Kirim notifikasi intelijen ke bot Anda
-    const report = `🌑 *NEURAL ARCHIVE ACCESSED*\n` +
-                   `Status: 🟢 ACTIVE\n` +
-                   `🌐 IP: \`${ip}\`\n` +
-                   `📟 Dev: ${device}\n` +
-                   `────────────────────\n` +
-                   `_Transmitting to year 2309..._`;
-
-    await bot.telegram.sendMessage(MY_CHAT_ID, report, { parse_mode: 'Markdown' });
-    res.status(200).send('OK');
+    await bot.telegram.sendMessage(MY_CHAT_ID, `🛰️ *NEURAL SYNC ESTABLISHED*\nUplink IP: \`${ip}\`\nStatus: Sovereign`, { parse_mode: 'Markdown' });
+    res.status(200).send('SYNC_OK');
 });
 
-// --- RENDER FRONTEND (The Holographic Interface) ---
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.send(`
@@ -34,162 +22,189 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Khansa | Neural Archive v15.0</title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;400;700&family=JetBrains+Mono:wght@100;300&display=swap" rel="stylesheet">
+        <title>KHANSA // SOVEREIGN ARCHIVE 2309</title>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
         <style>
-            :root { --bg: #000000; --accent: #00ffff; --border: rgba(0, 255, 255, 0.1); --glass: rgba(255, 255, 255, 0.02); }
+            :root { --bg: #000; --accent: #00f3ff; --dim: #111; }
             * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
-            body, html { background: var(--bg); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
+            body, html { 
+                background: var(--bg); color: #fff; 
+                font-family: 'Space Mono', monospace; 
+                height: 100vh; width: 100vw; overflow: hidden; 
+            }
+
+            /* Custom Cursor System */
+            #cursor { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; position: fixed; pointer-events: none; z-index: 10000; }
+            #cursor-ring { 
+                width: 40px; height: 40px; border: 1px solid rgba(0, 243, 255, 0.2); 
+                border-radius: 50%; position: fixed; pointer-events: none; 
+                z-index: 9999; transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+            }
+
+            canvas { position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; }
+            .noise { position: fixed; top:0; left:0; width:100%; height:100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.08; pointer-events: none; z-index: 100; }
+
+            /* HUD Interface */
+            .hud { position: fixed; padding: 40px; z-index: 500; font-size: 9px; letter-spacing: 3px; color: #444; text-transform: uppercase; }
+            .top-left { top: 0; left: 0; }
+            .top-right { top: 0; right: 0; text-align: right; }
+            .bottom-left { bottom: 0; left: 0; }
+            .bottom-right { bottom: 0; right: 0; text-align: right; }
+
+            .glitch-text { animation: glitch 5s infinite; color: var(--accent); }
+            @keyframes glitch { 0% { opacity: 1; } 50% { opacity: 0.5; } 52% { opacity: 1; } 100% { opacity: 1; } }
+
+            /* Main Content */
+            .main-frame { position: relative; z-index: 10; height: 100vh; display: flex; align-items: center; justify-content: center; }
+            .central-hub { text-align: center; }
+            h1 { font-family: 'Syncopate', sans-serif; font-size: clamp(3rem, 10vw, 8rem); letter-spacing: -5px; line-height: 0.8; margin-bottom: 20px; }
             
-            /* Grain Texture */
-            .noise { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.05; pointer-events: none; z-index: 100; }
-            
-            /* Custom Cursor */
-            #cursor { width: 15px; height: 15px; border: 1px solid var(--accent); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transition: transform 0.1s ease; mix-blend-mode: difference; }
+            /* Project Cards with 3D Tilt */
+            .archive-deck { display: flex; gap: 30px; margin-top: 50px; perspective: 1000px; }
+            .card { 
+                width: 300px; height: 400px; background: rgba(255,255,255,0.02); 
+                border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px);
+                padding: 30px; transition: 0.5s ease; transform-style: preserve-3d;
+            }
+            .card:hover { border-color: var(--accent); background: rgba(0, 243, 255, 0.03); }
+            .card h3 { font-size: 14px; letter-spacing: 5px; margin-bottom: 20px; }
+            .card p { font-size: 10px; color: #666; line-height: 1.8; }
 
-            /* Grid Background */
-            #canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-
-            /* Header Elite */
-            nav { position: fixed; top: 0; width: 100%; height: 90px; display: flex; align-items: center; justify-content: center; padding: 0 5%; z-index: 200; border-bottom: 1px solid var(--border); backdrop-filter: blur(20px); }
-            .brand { font-family: 'JetBrains Mono', monospace; font-weight: 300; letter-spacing: 5px; font-size: 14px; text-align: center; }
-            .nav-link { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 3px; color: #444; text-decoration: none; transition: 0.3s; margin: 0 15px; }
-            .nav-link:hover { color: #fff; }
-
-            /* Coordinates & Year Tracker */
-            .coordinates { position: fixed; top: 20px; right: 40px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #333; letter-spacing: 2px; text-align: right; z-index: 200; }
-            .year { position: fixed; top: 20px; left: 40px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #444; z-index: 200; }
-
-            /* Main Container */
-            .container { position: relative; z-index: 10; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-            .hero-title { font-size: 3rem; font-weight: 200; letter-spacing: 5px; text-align: center; margin-bottom: 50px; text-transform: uppercase; }
-
-            /* Neural Archive Grid */
-            .archive-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 90%; max-width: 1400px; height: 60vh; }
-            .archive-item { background: var(--glass); backdrop-filter: blur(30px); border: 1px solid var(--border); padding: 40px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; transition: 0.5s; }
-            .archive-item:hover { border-color: var(--accent); transform: translateY(-5px); box-shadow: 0 0 30px rgba(0,255,255,0.1); }
-            
-            .item-header { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #444; letter-spacing: 2px; }
-            .item-body h3 { font-size: 1.5rem; font-weight: 400; letter-spacing: 1px; margin: 15px 0; color: #fff; }
-            .item-body p { font-size: 11px; line-height: 1.8; color: #888; font-weight: 200; }
-            .item-body a { display: inline-block; margin-top: 15px; color: var(--accent); font-size: 10px; text-decoration: none; letter-spacing: 2px; text-transform: uppercase; }
-
-            .item-preview { margin-top: 20px; width: 100%; height: 100px; background: rgba(0,255,255,0.02); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #222; }
-
-            /* Bot Control Panel (The 2309 Simulation) */
-            .bot-control { position: fixed; bottom: 30px; right: 40px; width: 250px; background: var(--glass); backdrop-filter: blur(30px); border: 1px solid var(--border); padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 9px; z-index: 200; }
-            .bot-status { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: #fff; }
-            .dot { width: 6px; height: 6px; background: #0f0; border-radius: 50%; box-shadow: 0 0 10px #0f0; }
-
-            @media (max-width: 1024px) { .archive-grid { grid-template-columns: 1fr; height: auto; padding-top: 100px; } }
+            /* Transmission Status */
+            .status-bar { display: flex; align-items: center; gap: 10px; color: var(--accent); margin-top: 10px; }
+            .blink { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: blink 1s infinite; }
+            @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         </style>
     </head>
     <body>
         <div id="cursor"></div>
+        <div id="cursor-ring"></div>
         <div class="noise"></div>
-        <div class="year">2309</div>
-        <div class="coordinates">LAT: 107.6 E<br>LONG: -6.9 S<br>BANDUNG / INDONESIA</div>
-        <canvas id="canvas"></canvas>
-        
-        <nav>
-            <div class="brand">OBSCRA NEURAL ARCHIVE: PERSONAL PORTFOLIO | KHANSA v15.0</div>
-        </nav>
+        <canvas id="neural-bg"></canvas>
 
-        <div class="container">
-            <h1 class="hero-title">NEURAL ARCHIVE: SELECTED WORK v14.0</h1>
-            
-            <div class="archive-grid">
-                <div class="archive-item">
-                    <div class="item-header">
-                        <span>Archive Project</span>
-                        <span style="color:var(--accent);">#OBS-7721</span>
-                    </div>
-                    <div class="item-body">
-                        <h3>The Shadow Hoodie</h3>
-                        <p>A structural experiment in physical-digital convergence, where text and form merge.</p>
-                        <a href="#">Neural Link</a>
-                        <div class="item-preview">[DATA_PACKET_01]</div>
-                    </div>
-                </div>
+        <div class="hud top-left">
+            <div class="glitch-text">SIGNAL: SOVEREIGN</div>
+            <div>VER: 16.0.8 / 2309</div>
+        </div>
+        <div class="hud top-right">
+            <div>LOC: BANDUNG_ID // 107.6°E -6.9°S</div>
+            <div>UPLINK: ACTIVE</div>
+        </div>
+        <div class="hud bottom-left">
+            <div>KHANSA_NET_NODE</div>
+            <div class="status-bar"><div class="blink"></div> DATA_STREAMING...</div>
+        </div>
 
-                <div class="archive-item">
-                    <div class="item-header">
-                        <span>Archive Project</span>
-                        <span style="color:var(--accent);">#OBS-9104</span>
+        <main class="main-frame">
+            <div class="central-hub">
+                <h1 onmouseenter="expand()" onmouseleave="shrink()">KHANSA</h1>
+                <div class="archive-deck">
+                    <div class="card" onmousemove="tilt(event, this)" onmouseleave="resetTilt(this)">
+                        <div style="font-size: 9px; color: #333; margin-bottom: 100px;">DATA_01</div>
+                        <h3>OBSCRA_V1</h3>
+                        <p>Experimental neural link interface for modern garments.</p>
                     </div>
-                    <div class="item-body">
-                        <h3>Waste Protocol</h3>
-                        <p>Cognitive waste optimization system, enliminating dash location data structures.</p>
-                        <a href="#">Neural Link</a>
-                        <div class="item-preview">[DATA_PACKET_02]</div>
-                    </div>
-                </div>
-
-                <div class="archive-item">
-                    <div class="item-header">
-                        <span>Archive Project</span>
-                        <span style="color:var(--accent);">#OBS-9156</span>
-                    </div>
-                    <div class="item-body">
-                        <h3>VOID Interface</h3>
-                        <p>Merging informatics with aesthetic chaos. Deep neural link interface.</p>
-                        <a href="#">Neural Link</a>
-                        <div class="item-preview">[DATA_PACKET_03]</div>
+                    <div class="card" onmousemove="tilt(event, this)" onmouseleave="resetTilt(this)">
+                        <div style="font-size: 9px; color: #333; margin-bottom: 100px;">DATA_02</div>
+                        <h3>WASTE_SYS</h3>
+                        <p>Logic-driven environmental data structure management.</p>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="bot-control">
-            <div style="color:#555;">Bot Control Panel v8.0</div>
-            <div class="bot-status">
-                <div class="dot"></div>
-                <div>OBSCRA Status: <span style="color:#fff;">🟢 ACTIVE</span></div>
-            </div>
-            <div style="color:#444; margin-top:10px;">LAT LONG BANDUNG [ Indonesia ]</div>
-        </div>
+        </main>
 
         <script>
-            // Cursor Follower
-            const cursor = document.getElementById('cursor');
-            document.addEventListener('mousemove', e => {
-                cursor.style.left = e.clientX - 7 + 'px';
-                cursor.style.top = e.clientY - 7 + 'px';
-            });
-
-            // Intel report activation
-            window.onload = () => fetch('/intel');
-
-            // Neural Grid Canvas Animation
-            const canvas = document.getElementById('canvas');
+            // Advanced Particle Gravity System
+            const canvas = document.getElementById('neural-bg');
             const ctx = canvas.getContext('2d');
+            let particles = [];
+            let mouse = { x: -100, y: -100 };
+
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 
-            let particles = [];
-            for (let i = 0; i < 50; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5
-                });
+            window.addEventListener('mousemove', e => {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                document.getElementById('cursor').style.left = e.clientX + 'px';
+                document.getElementById('cursor').style.top = e.clientY + 'px';
+                document.getElementById('cursor-ring').style.left = (e.clientX - 20) + 'px';
+                document.getElementById('cursor-ring').style.top = (e.clientY - 20) + 'px';
+            });
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                    this.size = Math.random() * 1.5;
+                    this.baseX = this.x;
+                    this.baseY = this.y;
+                    this.density = (Math.random() * 30) + 1;
+                }
+                draw() {
+                    ctx.fillStyle = 'rgba(0, 243, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                update() {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let distance = Math.sqrt(dx*dx + dy*dy);
+                    let forceDirectionX = dx / distance;
+                    let forceDirectionY = dy / distance;
+                    let maxDistance = 150;
+                    let force = (maxDistance - distance) / maxDistance;
+                    let directionX = forceDirectionX * force * this.density;
+                    let directionY = forceDirectionY * force * this.density;
+
+                    if (distance < maxDistance) {
+                        this.x += directionX;
+                        this.y += directionY;
+                    } else {
+                        if (this.x !== this.baseX) {
+                            let dx = this.x - this.baseX;
+                            this.x -= dx/10;
+                        }
+                        if (this.y !== this.baseY) {
+                            let dy = this.y - this.baseY;
+                            this.y -= dy/10;
+                        }
+                    }
+                }
             }
 
-            function draw() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#0f0';
-                ctx.globalAlpha = 0.1;
-                particles.forEach(p => {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-                    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                    ctx.fillRect(p.x, p.y, 1, 1);
-                });
-                requestAnimationFrame(draw);
+            function init() {
+                particles = [];
+                for (let i = 0; i < 200; i++) particles.push(new Particle());
             }
-            draw();
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animate);
+            }
+
+            init(); animate();
+
+            // 3D Tilt Logic
+            function tilt(e, el) {
+                const rect = el.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const xc = rect.width / 2;
+                const yc = rect.height / 2;
+                const dx = x - xc;
+                const dy = y - yc;
+                el.style.transform = \`rotateY(\${dx / 10}deg) rotateX(\${-dy / 10}deg) scale(1.05)\`;
+            }
+            function resetTilt(el) { el.style.transform = 'rotateY(0) rotateX(0) scale(1)'; }
+            
+            function expand() { document.getElementById('cursor-ring').style.transform = 'scale(2)'; }
+            function shrink() { document.getElementById('cursor-ring').style.transform = 'scale(1)'; }
+
+            window.onload = () => fetch('/sync');
         </script>
     </body>
     </html>
