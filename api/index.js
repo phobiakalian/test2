@@ -7,10 +7,19 @@ app.use(express.json());
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_CHAT_ID = process.env.MY_CHAT_ID;
 
-// Log akses ke bot Telegram
-app.get('/log', async (req, res) => {
+app.get('/intel', async (req, res) => {
     const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress).split(',')[0];
-    await bot.telegram.sendMessage(MY_CHAT_ID, `👁️ *GALLERY ACCESS*\nIP: \`${ip}\`\nPage: ${req.query.page || 'Unknown'}`, { parse_mode: 'Markdown' });
+    const ua = req.headers['user-agent'];
+    const device = ua.includes('Mobile') ? '📱 Mobile' : '💻 Desktop';
+    const page = req.query.view || 'Unknown';
+    
+    await bot.telegram.sendMessage(MY_CHAT_ID, 
+        `🌑 *OBSCRA ACCESS LOG*\n` +
+        `────────────────────\n` +
+        `👁️ View: *${page.toUpperCase()}*\n` +
+        `🌐 IP: \`${ip}\`\n` +
+        `📟 Dev: ${device}\n` +
+        `────────────────────`, { parse_mode: 'Markdown' });
     res.status(200).send('OK');
 });
 
@@ -22,107 +31,178 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>OBSCRA | Digital Archive</title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;400;700&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
+        <title>OBSCRA — ARCHIVE 23.10</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;600&family=Playfair+Display:ital,wght@1,300&display=swap" rel="stylesheet">
         <style>
-            :root { --bg: #050505; --accent: #ffffff; --border: rgba(255,255,255,0.08); }
+            :root { --bg: #000000; --fg: #ffffff; --accent: #666666; --glass: rgba(255,255,255,0.03); }
             * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
-            body, html { background: var(--bg); color: var(--accent); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
             
-            #cursor { width: 15px; height: 15px; border: 1px solid var(--accent); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transition: transform 0.1s ease; mix-blend-mode: difference; }
-            .noise { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.04; pointer-events: none; z-index: 100; }
-            
-            nav { position: fixed; top: 40px; width: 100%; display: flex; justify-content: center; gap: 50px; z-index: 150; mix-blend-mode: difference; }
-            .nav-link { font-size: 10px; letter-spacing: 5px; text-transform: uppercase; color: #555; text-decoration: none; transition: 0.4s; }
+            body, html { 
+                background: var(--bg); color: var(--fg); 
+                font-family: 'Inter', sans-serif; overflow: hidden; 
+                height: 100vh; width: 100vw;
+            }
+
+            /* Premium Custom Cursor */
+            #cursor { 
+                width: 8px; height: 8px; background: #fff; 
+                border-radius: 50%; position: fixed; pointer-events: none; 
+                z-index: 9999; transition: transform 0.15s ease-out; 
+            }
+            #cursor-follower { 
+                width: 40px; height: 40px; border: 1px solid rgba(255,255,255,0.2); 
+                border-radius: 50%; position: fixed; pointer-events: none; 
+                z-index: 9998; transition: transform 0.3s ease-out; 
+            }
+
+            /* Grainy Texture */
+            .noise { 
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: url('https://grainy-gradients.vercel.app/noise.svg'); 
+                opacity: 0.05; pointer-events: none; z-index: 100; 
+            }
+
+            /* Navigation Elite */
+            nav { 
+                position: fixed; top: 0; left: 0; width: 100%; height: 100px;
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 0 60px; z-index: 200; backdrop-filter: blur(10px);
+            }
+            .brand { font-weight: 600; letter-spacing: 10px; font-size: 0.8rem; }
+            .nav-links { display: flex; gap: 40px; }
+            .nav-link { 
+                font-size: 9px; text-transform: uppercase; letter-spacing: 4px; 
+                text-decoration: none; color: var(--accent); transition: 0.4s; 
+            }
             .nav-link:hover, .nav-link.active { color: #fff; }
 
-            .page { display: none; width: 100%; min-height: 100vh; padding: 120px 20px 60px; flex-direction: column; align-items: center; }
-            .page.active { display: flex; animation: slideUp 0.8s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+            /* Page Architecture */
+            .container { position: relative; width: 100%; height: 100%; }
+            .section { 
+                position: absolute; width: 100%; height: 100%; 
+                display: none; padding: 120px 60px 60px;
+                flex-direction: column; align-items: center; justify-content: center;
+            }
+            .section.active { display: flex; animation: pageIn 1.2s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
 
-            /* Gallery System */
-            .gallery-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; width: 100%; max-width: 1200px; }
-            .gallery-item { position: relative; overflow: hidden; border: 1px solid var(--border); aspect-ratio: 3/4; background: #0a0a0a; transition: 0.5s; }
-            .gallery-item:hover { border-color: #555; }
-            .gallery-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; transition: 0.8s cubic-bezier(0.19, 1, 0.22, 1); }
-            .gallery-item:hover img { opacity: 1; transform: scale(1.05); }
-            
-            .item-info { position: absolute; bottom: 20px; left: 20px; opacity: 0; transition: 0.4s; }
-            .gallery-item:hover .item-info { opacity: 1; }
-            .item-title { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; }
+            /* Home Content */
+            .hero-title { font-size: clamp(4rem, 18vw, 12rem); font-weight: 100; letter-spacing: -5px; line-height: 0.8; }
+            .hero-sub { font-family: 'Playfair Display', serif; font-style: italic; color: var(--accent); margin-top: 20px; font-size: 1.5rem; }
 
-            /* Modal System */
-            #modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(10px); }
-            #modal img { max-width: 90%; max-height: 80%; border: 1px solid var(--border); }
+            /* Archive Grid */
+            .archive-grid { 
+                display: grid; grid-template-columns: repeat(3, 1fr); 
+                gap: 20px; width: 100%; max-width: 1400px; height: 70vh; 
+            }
+            .archive-item { 
+                position: relative; background: var(--glass); 
+                border: 1px solid rgba(255,255,255,0.05); overflow: hidden;
+                transition: 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+            }
+            .archive-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.5; transition: 0.8s; }
+            .archive-item:hover img { opacity: 1; transform: scale(1.05); }
+            .archive-label { 
+                position: absolute; bottom: 30px; left: 30px; 
+                font-size: 10px; letter-spacing: 3px; font-weight: 600; 
+                opacity: 0; transform: translateY(10px); transition: 0.4s;
+            }
+            .archive-item:hover .archive-label { opacity: 1; transform: translateY(0); }
 
-            @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+            /* About Content */
+            .about-text { max-width: 800px; text-align: center; line-height: 2; letter-spacing: 1px; color: #aaa; font-weight: 100; font-size: 14px;}
+
+            @keyframes pageIn {
+                from { opacity: 0; transform: scale(1.05); filter: blur(10px); }
+                to { opacity: 1; transform: scale(1); filter: blur(0); }
+            }
+
+            @media (max-width: 768px) {
+                nav { padding: 0 30px; }
+                .nav-links { display: none; } /* Mobile simplicity */
+                .archive-grid { grid-template-columns: 1fr; }
+            }
         </style>
     </head>
     <body>
         <div id="cursor"></div>
+        <div id="cursor-follower"></div>
         <div class="noise"></div>
         
         <nav>
-            <a href="#" class="nav-link active" onclick="showPage('index')">Index</a>
-            <a href="#" class="nav-link" onclick="showPage('collection')">Archive</a>
-            <a href="#" class="nav-link" onclick="showPage('about')">About</a>
+            <div class="brand">OBSCRA</div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" onclick="navigate('home')">Home</a>
+                <a href="#" class="nav-link" onclick="navigate('archive')">Archive</a>
+                <a href="#" class="nav-link" onclick="navigate('about')">The Studio</a>
+            </div>
         </nav>
 
-        <div id="index" class="page active">
-            <h1 style="font-size: clamp(3rem, 15vw, 8rem); font-weight: 700; letter-spacing: -2px; margin-top: 15vh;">OBSCRA</h1>
-            <p style="font-family:'Playfair Display', serif; font-style:italic; color:#666; font-size: 1.2rem;">Silence is a statement.</p>
-        </div>
+        <div class="container">
+            <section id="home" class="section active">
+                <h1 class="hero-title">OBSCRA</h1>
+                <p class="hero-sub">The Architecture of Silence</p>
+            </section>
 
-        <div id="collection" class="page">
-            <div class="gallery-container">
-                <div class="gallery-item" onclick="openModal('https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=1000')">
-                    <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=1000">
-                    <div class="item-info"><p class="item-title">ARCHIVE_01 / NOIR</p></div>
+            <section id="archive" class="section">
+                <div class="archive-grid">
+                    <div class="archive-item">
+                        <img src="https://images.unsplash.com/photo-1550614000-4895a10e1bfd?q=80&w=1000">
+                        <div class="archive-label">01 / NOIR SHADOW</div>
+                    </div>
+                    <div class="archive-item">
+                        <img src="https://images.unsplash.com/photo-1534030347209-467a5b0ad3e6?q=80&w=1000">
+                        <div class="archive-label">02 / GRIS OVERSIZE</div>
+                    </div>
+                    <div class="archive-item">
+                        <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?q=80&w=1000">
+                        <div class="archive-label">03 / BLANC MINIMAL</div>
+                    </div>
                 </div>
-                <div class="gallery-item" onclick="openModal('https://images.unsplash.com/photo-1539109132304-972993896197?auto=format&fit=crop&q=80&w=1000')">
-                    <img src="https://images.unsplash.com/photo-1539109132304-972993896197?auto=format&fit=crop&q=80&w=1000">
-                    <div class="item-info"><p class="item-title">ARCHIVE_02 / GRIS</p></div>
-                </div>
-                <div class="gallery-item" onclick="openModal('https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=1000')">
-                    <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=1000">
-                    <div class="item-info"><p class="item-title">ARCHIVE_03 / BLANC</p></div>
-                </div>
-            </div>
-        </div>
+            </section>
 
-        <div id="about" class="page">
-            <div style="max-width: 600px; text-align: center;">
-                <h2 style="font-family:'Playfair Display', serif; font-style:italic; font-size: 2.5rem; margin-bottom: 30px;">The Studio</h2>
-                <p style="font-size: 11px; line-height: 2.5; color: #888; letter-spacing: 2px;">
-                    OBSCRA IS A MULTIDISCIPLINARY CREATIVE UNIT BASED IN BANDUNG. WE MERGE THE PRECISION OF COMPUTER SCIENCE WITH THE CHAOS OF STREETWEAR AESTHETICS. EVERY PIECE IS A FRAGMENT OF A LARGER DATA STREAM.
+            <section id="about" class="section">
+                <p class="about-text">
+                    <span style="color:#fff; font-weight:600;">OBSCRA</span> IS A MULTIDISCIPLINARY DESIGN ENTITY. WE EXPLORE THE INTERSECTION OF INFORMATICS PRECISION AND TEXTILE AESTHETICS. EVERY COLLECTION IS A DATA POINT IN OUR ONGOING EVOLUTION. BASED IN BANDUNG, INDONESIA.
                 </p>
-            </div>
+            </section>
         </div>
-
-        <div id="modal" onclick="this.style.display='none'"><img id="modalImg"></div>
 
         <script>
-            function showPage(id) {
-                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            // Elite Navigation Logic
+            function navigate(id) {
+                document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
                 document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                
                 document.getElementById(id).classList.add('active');
                 event.target.classList.add('active');
-                fetch('/log?page=' + id);
-                window.scrollTo(0,0);
+                
+                // Trigger Intel Report
+                fetch('/intel?view=' + id);
             }
 
-            function openModal(src) {
-                document.getElementById('modal').style.display = 'flex';
-                document.getElementById('modalImg').src = src;
-            }
-
+            // Premium Cursor Tracking
             const cursor = document.getElementById('cursor');
-            document.addEventListener('mousemove', e => {
-                cursor.style.left = e.clientX - 7 + 'px';
-                cursor.style.top = e.clientY - 7 + 'px';
-            });
+            const follower = document.getElementById('cursor-follower');
             
-            document.addEventListener('mousedown', () => cursor.style.transform = 'scale(0.5)');
-            document.addEventListener('mouseup', () => cursor.style.transform = 'scale(1)');
+            document.addEventListener('mousemove', e => {
+                const x = e.clientX;
+                const y = e.clientY;
+                
+                cursor.style.transform = \`translate3d(\${x - 4}px, \${y - 4}px, 0)\`;
+                follower.style.transform = \`translate3d(\${x - 20}px, \${y - 20}px, 0)\`;
+            });
+
+            // Hover interactions
+            document.querySelectorAll('a, .archive-item').forEach(el => {
+                el.addEventListener('mouseenter', () => {
+                    follower.style.transform += ' scale(1.5)';
+                    follower.style.background = 'rgba(255,255,255,0.1)';
+                });
+                el.addEventListener('mouseleave', () => {
+                    follower.style.transform = follower.style.transform.replace(' scale(1.5)', '');
+                    follower.style.background = 'transparent';
+                });
+            });
         </script>
     </body>
     </html>
