@@ -15,12 +15,11 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>KHANSA // KICAU PRECISION 2309</title>
+        <title>KHANSA // NEURAL PRECISION 2309</title>
         <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syncopate:wght@700&display=swap" rel="stylesheet">
         
         <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
         <style>
@@ -29,161 +28,159 @@ app.get('/', (req, res) => {
             body, html { background: var(--bg); color: #fff; font-family: 'Space Mono', monospace; height: 100vh; width: 100vw; overflow: hidden; }
             
             #cursor { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; position: fixed; pointer-events: none; z-index: 10000; }
-            #cursor-ring { width: 40px; height: 40px; border: 1px solid rgba(0, 243, 255, 0.2); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+            #cursor-ring { width: 40px; height: 40px; border: 1px solid rgba(0, 243, 255, 0.2); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transition: transform 0.2s ease; }
             
             .hud { position: fixed; padding: 30px; z-index: 500; font-size: 9px; letter-spacing: 3px; color: #444; text-transform: uppercase; }
             .t-l { top: 0; left: 0; } .t-r { top: 0; right: 0; text-align: right; }
-            
-            /* SENSOR UI */
-            #video-ui { position: fixed; bottom: 20px; right: 20px; width: 240px; border: 1px solid var(--accent); z-index: 600; background: #000; padding: 10px; display: none; }
-            #webcam { width: 100%; height: auto; transform: scaleX(-1); border: 1px solid #222; }
-            .debug-info { font-size: 8px; color: var(--accent); margin-top: 5px; font-family: monospace; }
 
-            /* KUCING OVERLAY */
-            #kucing-layer { 
+            /* SENSOR INTERFACE */
+            #video-module { position: fixed; bottom: 20px; right: 20px; width: 220px; border: 1px solid var(--accent); z-index: 600; background: #000; padding: 10px; display: none; }
+            #webcam { width: 100%; height: auto; transform: scaleX(-1); border: 1px solid #111; }
+            .log { font-size: 8px; color: var(--accent); margin-top: 5px; font-family: monospace; }
+
+            /* KICAU MANIA OVERLAY */
+            #kicau-overlay { 
                 position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); 
-                width: 80%; max-width: 500px; z-index: 10002; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+                width: 85%; max-width: 550px; z-index: 10002; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             }
-            #kucing-layer.active { transform: translate(-50%, -50%) scale(1); }
-            video#cat-vid { width: 100%; border: 2px solid var(--accent); box-shadow: 0 0 50px rgba(0,243,255,0.3); }
+            #kicau-overlay.active { transform: translate(-50%, -50%) scale(1); }
+            video#cat-media { width: 100%; border: 1px solid var(--accent); }
 
-            /* CLI */
-            #cli { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10001; display: none; flex-direction: column; padding: 60px; }
-            #cli-out { flex-grow: 1; overflow-y: auto; color: var(--accent); font-size: 12px; }
-            #cli-in { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-family: inherit; margin-top: 20px; }
+            /* CLI TERMINAL */
+            #cli { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 10001; display: none; flex-direction: column; padding: 60px; }
+            #cli-out { flex-grow: 1; overflow-y: auto; color: var(--accent); font-size: 11px; line-height: 1.8; }
+            #cli-in { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-family: inherit; margin-top: 20px; font-size: 14px; }
         </style>
     </head>
     <body>
         <div id="cursor"></div><div id="cursor-ring"></div>
-        <div class="hud t-l">KHANSA // NEURAL LINK<br>PRECISION_MODE: ACTIVE</div>
-        <div class="hud t-r">BANDUNG_ID<br>2309_ARCHIVE</div>
+        <div class="hud t-l">KHANSA // NEURAL LINK<br>MODE: GESTURE_RECOGNITION</div>
+        <div class="hud t-r">BANDUNG // ID<br>UPLINK: STABLE</div>
 
-        <div id="video-ui">
+        <div id="video-module">
             <video id="webcam" autoplay playsinline></video>
-            <div class="debug-info" id="db-mouth">MOUTH: NO</div>
-            <div class="debug-info" id="db-wave">WAVE: NO</div>
-            <div class="debug-info" id="db-count">GESTURE_COUNT: 0</div>
+            <div class="log" id="mouth-stat">MOUTH_PROXIMITY: NO</div>
+            <div class="log" id="wave-stat">WAVE_MOTION: NO</div>
+            <div class="log" id="count-stat">VOLTAGE_LEVEL: 0</div>
         </div>
 
-        <div id="kucing-layer">
-            <video id="cat-vid" loop muted playsinline>
-                <source src="https://test2-gold-theta.vercel.app/cat.mp4" type="video/mp4">
+        <div id="kicau-overlay">
+            <video id="cat-media" loop muted playsinline>
+                <source src="/cat.mp4" type="video/mp4">
             </video>
-            <audio id="cat-audio" loop src="https://test2-gold-theta.vercel.app/cat_audio.mp3"></audio>
+            <audio id="cat-audio" loop src="/cat_audio.mp3"></audio>
+            <div style="text-align:center; padding:10px; font-size:9px; letter-spacing:5px; background:var(--accent); color:#000; font-weight:bold;">KICAU_MANIA_PROTOCOL_ENGAGED</div>
         </div>
 
         <div id="cli">
-            <div id="cli-out"><div>[ OBSCRA PRECISION TERMINAL ]</div><div>Type 'kicau --start' to bind sensor.</div></div>
-            <input type="text" id="cli-in" autofocus>
+            <div id="cli-out"><div>[ KHANSA NEURAL COMMAND ]</div><div>Enter 'kicau --init' to bind gesture sensors.</div></div>
+            <div style="display:flex; align-items:center;">
+                <span style="color:var(--accent); margin-right:10px;">></span>
+                <input type="text" id="cli-in" autofocus autocomplete="off">
+            </div>
         </div>
 
         <main style="display:flex; height:100vh; align-items:center; justify-content:center;">
-            <h1 style="font-family:'Syncopate'; font-size:10vw; letter-spacing:-10px;">KHANSA</h1>
+            <h1 style="font-family:'Syncopate'; font-size:12vw; letter-spacing:-12px; color:rgba(255,255,255,0.05);">KHANSA</h1>
         </main>
 
         <script>
             const videoElement = document.getElementById('webcam');
-            const catVid = document.getElementById('cat-vid');
+            const catMedia = document.getElementById('cat-media');
             const catAudio = document.getElementById('cat-audio');
             const cli = document.getElementById('cli');
             const cliIn = document.getElementById('cli-in');
-            const dbMouth = document.getElementById('db-mouth');
-            const dbWave = document.getElementById('db-wave');
-            const dbCount = document.getElementById('db-count');
-
+            
             let gestureCount = 0;
             let xHistory = [];
-            const WINDOW_SIZE = 20;
-            const MOVE_THRESHOLD = 0.08;
-            const GESTURE_THRESHOLD = 8;
             let faceLandmarks = null;
+            const WINDOW_SIZE = 20;
+            const MOVE_THRESHOLD = 0.07;
+            const GESTURE_THRESHOLD = 8;
 
-            // 1. Setup MediaPipe Hands
+            // MediaPipe Logic
             const hands = new Hands({locateFile: (file) => \`https://cdn.jsdelivr.net/npm/@mediapipe/hands/\${file}\`});
-            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.3 });
+            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.4 });
             hands.onResults(onHandResults);
 
-            // 2. Setup MediaPipe FaceMesh
             const faceMesh = new FaceMesh({locateFile: (file) => \`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/\${file}\`});
-            faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.3 });
+            faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5 });
             faceMesh.onResults(results => { faceLandmarks = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null; });
 
             function onHandResults(results) {
-                let handNearMouth = false;
-                let handWaving = false;
+                let isNearMouth = false;
+                let isWaving = false;
 
                 if (results.multiHandLandmarks && faceLandmarks) {
-                    const mouth = faceLandmarks[13]; // Titik bibir tengah
+                    const mouth = faceLandmarks[13]; // Middle lip
                     
-                    results.multiHandLandmarks.forEach((hand, index) => {
-                        const palm = hand[9]; // Middle finger MCP
+                    results.multiHandLandmarks.forEach((hand) => {
+                        const palm = hand[9]; // Palm center
                         const dist = Math.sqrt(Math.pow(palm.x - mouth.x, 2) + Math.pow(palm.y - mouth.y, 2));
                         
-                        if (dist < 0.15) handNearMouth = true;
+                        if (dist < 0.16) isNearMouth = true;
 
-                        // Tracking gerakan untuk tangan kedua atau tangan yang sama
                         xHistory.push(palm.x);
                         if (xHistory.length > WINDOW_SIZE) xHistory.shift();
 
                         if (xHistory.length === WINDOW_SIZE) {
-                            const movement = Math.max(...xHistory) - Math.min(...xHistory);
-                            if (movement > MOVE_THRESHOLD) handWaving = true;
+                            const moveRange = Math.max(...xHistory) - Math.min(...xHistory);
+                            if (moveRange > MOVE_THRESHOLD) isWaving = true;
                         }
                     });
                 }
 
-                dbMouth.innerText = "MOUTH: " + (handNearMouth ? "YES" : "NO");
-                dbWave.innerText = "WAVE: " + (handWaving ? "YES" : "NO");
+                document.getElementById('mouth-stat').innerText = "MOUTH_PROXIMITY: " + (isNearMouth ? "YES" : "NO");
+                document.getElementById('wave-stat').innerText = "WAVE_MOTION: " + (isWaving ? "YES" : "NO");
 
-                // Debounce Logic (Mirip Python Anda)
-                if (handNearMouth && handWaving) {
+                // Debounce Logic
+                if (isNearMouth && isWaving) {
                     gestureCount = Math.min(gestureCount + 2, GESTURE_THRESHOLD);
                 } else {
                     gestureCount = Math.max(gestureCount - 1, 0);
                 }
 
-                dbCount.innerText = "GESTURE_COUNT: " + gestureCount;
+                document.getElementById('count-stat').innerText = "VOLTAGE_LEVEL: " + gestureCount;
 
                 if (gestureCount >= GESTURE_THRESHOLD) {
-                    if (catVid.paused) {
-                        document.getElementById('kucing-layer').classList.add('active');
-                        catVid.play();
+                    if (catMedia.paused) {
+                        document.getElementById('kicau-overlay').classList.add('active');
+                        catMedia.play();
                         catAudio.play();
                     }
                 } else {
-                    if (!catVid.paused) {
-                        document.getElementById('kucing-layer').classList.remove('active');
-                        catVid.pause();
+                    if (!catMedia.paused) {
+                        document.getElementById('kicau-overlay').classList.remove('active');
+                        catMedia.pause();
                         catAudio.pause();
-                        catVid.currentTime = 0;
+                        catMedia.currentTime = 0;
                     }
                 }
             }
 
-            // 3. Camera Start
-            async function startKicau() {
-                document.getElementById('video-ui').style.display = 'block';
+            async function initSensor() {
+                document.getElementById('video-module').style.display = 'block';
                 const camera = new Camera(videoElement, {
                     onFrame: async () => {
                         await faceMesh.send({image: videoElement});
                         await hands.send({image: videoElement});
                     },
-                    width: 240, height: 180
+                    width: 220, height: 165
                 });
                 camera.start();
             }
 
-            // 4. CLI Interaction
+            // Interface Control
             cliIn.addEventListener('keydown', e => {
                 if(e.key === 'Enter') {
-                    if(cliIn.value === 'kicau --start') startKicau();
+                    if(cliIn.value === 'kicau --init') initSensor();
                     if(cliIn.value === 'exit') cli.style.display = 'none';
                     cliIn.value = '';
                 }
             });
             document.addEventListener('keydown', e => { if(e.key === '~') cli.style.display = 'flex'; });
 
-            // Cursor
+            // Neural Cursor
             document.addEventListener('mousemove', e => {
                 document.getElementById('cursor').style.left = e.clientX + 'px';
                 document.getElementById('cursor').style.top = e.clientY + 'px';
@@ -193,6 +190,10 @@ app.get('/', (req, res) => {
     </body>
     </html>
     `);
+});
+
+app.post('/api/bot', async (req, res) => {
+    try { await bot.handleUpdate(req.body); res.status(200).send('OK'); } catch (e) { res.status(500).send('ERR'); }
 });
 
 module.exports = app;
