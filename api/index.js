@@ -1,34 +1,52 @@
 const express = require('express');
 const { Telegraf } = require('telegraf');
+const axios = require('axios'); // Pastikan sudah npm install axios
 
 const app = express();
 app.use(express.json());
 
-// Konfigurasi Bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_CHAT_ID = process.env.MY_CHAT_ID;
 
-// --- LOGIKA BOT OBSCRA ---
-bot.start((ctx) => {
-    ctx.replyWithMarkdownV2(
-        `*OBSCRA SYSTEM ACTIVE*\n\nSelamat datang di pusat enkripsi, *El manco*\\.\n\n🆔 ID Anda: \`${ctx.chat.id}\`\n\n_Pastikan ID ini terpasang di Environment Variable MY_CHAT_ID\\._`
-    );
-});
+// Fungsi untuk melacak lokasi berdasarkan IP
+const getGeoInfo = async (ip) => {
+    try {
+        // Melakukan request ke database intelijen IP
+        const response = await axios.get(`http://ip-api.com/json/${ip}?fields=status,country,city,isp,org`);
+        if (response.data.status === 'success') {
+            return response.data;
+        }
+        return null;
+    } catch (error) {
+        return null;
+    }
+};
 
-// Fungsi Notifikasi Kunjungan
-const sendVisitorAlert = (req) => {
+// Fungsi Notifikasi Intelijen
+const sendVisitorAlert = async (req) => {
     if (!MY_CHAT_ID) return;
+
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const geo = await getGeoInfo(ip.split(',')[0]); // Ambil IP pertama jika ada proxy
     const time = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+    let report = `🌑 *OBSCRA INTEL REPORT*\n\n`;
+    report += `🌐 *IP:* \`${ip}\`\n`;
     
-    const report = `🌑 *OBSCRA ACCESS*\n\nSeorang pengunjung terdeteksi di radar\\.\n📍 *IP:* \`${ip}\`\n⏰ *Waktu:* ${time}`;
+    if (geo) {
+        report += `📍 *Lokasi:* ${geo.city}, ${geo.country}\n`;
+        report += `🏢 *Provider:* ${geo.isp}\n`;
+    }
     
+    report += `⏰ *Waktu:* ${time}\n\n`;
+    report += `_Sistem memantau pergerakan target..._`;
+
     bot.telegram.sendMessage(MY_CHAT_ID, report, { parse_mode: 'Markdown' }).catch(() => {});
 };
 
 // --- INTERFACE VISUAL OBSCRA ---
-app.get('/', (req, res) => {
-    sendVisitorAlert(req);
+app.get('/', async (req, res) => {
+    await sendVisitorAlert(req);
     res.setHeader('Content-Type', 'text/html');
     res.send(`
         <!DOCTYPE html>
@@ -71,14 +89,8 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Endpoint Webhook
 app.post('/api/bot', async (req, res) => {
-    try {
-        await bot.handleUpdate(req.body);
-        res.status(200).send('OK');
-    } catch (err) {
-        res.status(500).send('ERR');
-    }
+    try { await bot.handleUpdate(req.body); res.status(200).send('OK'); } catch (e) { res.status(500).send('ERR'); }
 });
 
 module.exports = app;
