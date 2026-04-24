@@ -69,6 +69,23 @@ app.get('/', (req, res) => {
             .card:hover { border-color: var(--accent); background: rgba(0, 243, 255, 0.03); }
             .card h3 { font-size: 14px; letter-spacing: 5px; margin-bottom: 20px; }
             .card p { font-size: 10px; color: #666; line-height: 1.8; }
+            /* CLI OVERLAY */
+            #cli-layer {
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0, 0, 0, 0.95); z-index: 10001;
+                display: none; flex-direction: column; padding: 60px;
+                font-family: 'Space Mono', monospace; border: 1px solid var(--accent);
+            }
+            #cli-output {
+                flex-grow: 1; overflow-y: auto; color: var(--accent);
+                font-size: 12px; line-height: 1.6; margin-bottom: 20px;
+            }
+            #cli-input-wrapper { display: flex; align-items: center; gap: 10px; }
+            #cli-input {
+                background: transparent; border: none; color: #fff;
+                width: 100%; outline: none; font-family: inherit; font-size: 14px;
+            }
+            .term-prompt { color: var(--accent); font-weight: bold; }
 
             /* Transmission Status */
             .status-bar { display: flex; align-items: center; gap: 10px; color: var(--accent); margin-top: 10px; }
@@ -94,6 +111,16 @@ app.get('/', (req, res) => {
             <div>KHANSA_NET_NODE</div>
             <div class="status-bar"><div class="blink"></div> DATA_STREAMING...</div>
         </div>
+        <div id="cli-layer">
+            <div id="cli-output">
+                <div style="color: #fff; margin-bottom: 20px;">[ OBSCRA TERMINAL v1.0.4 - AUTHORIZED ACCESS ONLY ]</div>
+                <div>Type 'help' to see available protocols.</div>
+            </div>
+            <div id="cli-input-wrapper">
+                <span class="term-prompt">khansa@neural_archive:~$</span>
+                <input type="text" id="cli-input" autofocus autocomplete="off">
+            </div>
+        </div>
 
         <main class="main-frame">
             <div class="central-hub">
@@ -117,6 +144,9 @@ app.get('/', (req, res) => {
             // Advanced Particle Gravity System
             const canvas = document.getElementById('neural-bg');
             const ctx = canvas.getContext('2d');
+            const cliLayer = document.getElementById('cli-layer');
+            const cliInput = document.getElementById('cli-input');
+            const cliOutput = document.getElementById('cli-output');
             let particles = [];
             let mouse = { x: -100, y: -100 };
 
@@ -131,7 +161,24 @@ app.get('/', (req, res) => {
                 document.getElementById('cursor-ring').style.left = (e.clientX - 20) + 'px';
                 document.getElementById('cursor-ring').style.top = (e.clientY - 20) + 'px';
             });
-
+            document.addEventListener('keydown', e => {
+                if (e.key === '~' || e.key === '`') {
+                    cliLayer.style.display = cliLayer.style.display === 'flex' ? 'none' : 'flex';
+                    if (cliLayer.style.display === 'flex') setTimeout(() => cliInput.focus(), 10);
+                }
+                if (e.key === 'Escape') cliLayer.style.display = 'none';
+            });
+            
+            cliInput.addEventListener('keydown', async e => {
+                if (e.key === 'Enter') {
+                    const cmd = cliInput.value.toLowerCase().trim();
+                    printOutput(\`<span class="term-prompt">khansa@neural_archive:~$</span> \${cliInput.value}\`);
+                    cliInput.value = '';
+                    
+                    await processCommand(cmd);
+                    cliOutput.scrollTop = cliOutput.scrollHeight;
+                }
+            });
             class Particle {
                 constructor() {
                     this.x = Math.random() * canvas.width;
@@ -203,7 +250,36 @@ app.get('/', (req, res) => {
             
             function expand() { document.getElementById('cursor-ring').style.transform = 'scale(2)'; }
             function shrink() { document.getElementById('cursor-ring').style.transform = 'scale(1)'; }
-
+            function printOutput(text) {
+                const div = document.createElement('div');
+                div.innerHTML = text;
+                cliOutput.appendChild(div);
+            }
+            
+            async function processCommand(cmd) {
+                switch(cmd) {
+                    case 'help':
+                        printOutput('Available protocols:<br>- whoami : Identification<br>- projects : Extraction list<br>- status : Neural health<br>- clear : Wipe screen<br>- exit : Close terminal');
+                        break;
+                    case 'whoami':
+                        printOutput('IDENTITY: KHANSA<br>ROLE: FULL-STACK ARCHITECT<br>STATUS: INFORMATICS ENGINEERING STUDENT [UNIV_ID_ENCRYPTED]');
+                        break;
+                    case 'projects':
+                        printOutput('EXTRACTING ARCHIVES...<br>1. OBSCRA_INTERFACE [LIVE]<br>2. WASTE_BANK_SYS [STABLE]<br>3. NEURAL_PORTFOLIO_V16 [ACTIVE]');
+                        break;
+                    case 'status':
+                        printOutput('CPU: 100% | NEURAL_LINK: STABLE | YEAR: 2309 | UPLINK: VERIFIED');
+                        break;
+                    case 'clear':
+                        cliOutput.innerHTML = '';
+                        break;
+                    case 'exit':
+                        cliLayer.style.display = 'none';
+                        break;
+                    default:
+                        printOutput(\'COMMAND NOT RECOGNIZED: \' + cmd);
+                }
+            }
             window.onload = () => fetch('/sync');
         </script>
     </body>
