@@ -7,14 +7,6 @@ app.use(express.json());
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_CHAT_ID = process.env.MY_CHAT_ID;
 
-app.get('/sync', async (req, res) => {
-    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress).split(',')[0];
-    const ua = req.headers['user-agent'];
-    const device = ua.includes('Mobile') ? '📱 MOBILE_NODE' : '💻 DESKTOP_NODE';
-    await bot.telegram.sendMessage(MY_CHAT_ID, `🛰️ *UNIVERSAL SYNC*\nUplink: \`${ip}\`\nDevice: \`${device}\``, { parse_mode: 'Markdown' });
-    res.status(200).send('OK');
-});
-
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.send(`
@@ -22,219 +14,185 @@ app.get('/', (req, res) => {
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>KHANSA // NEURAL LINK 2309</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>KHANSA // KICAU PRECISION 2309</title>
         <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syncopate:wght@700&display=swap" rel="stylesheet">
+        
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
         <style>
             :root { --accent: #00f3ff; --bg: #000; --glass: rgba(255,255,255,0.03); }
-            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-            body, html { 
-                background: var(--bg); color: #fff; font-family: 'Space Mono', monospace; 
-                overflow-x: hidden; width: 100%; height: 100%; 
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+            body, html { background: var(--bg); color: #fff; font-family: 'Space Mono', monospace; height: 100vh; width: 100vw; overflow: hidden; }
             
-            /* Cursor - Hidden on Mobile */
-            #cursor, #cursor-ring { position: fixed; pointer-events: none; z-index: 10000; display: none; }
-            @media (min-width: 1024px) {
-                #cursor { display: block; width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
-                #cursor-ring { display: block; width: 40px; height: 40px; border: 1px solid rgba(0,243,255,0.2); border-radius: 50%; transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
-                body { cursor: none; }
-            }
-
-            canvas { position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; }
-            .noise { position: fixed; top:0; left:0; width:100%; height:100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.08; pointer-events: none; z-index: 100; }
-
-            /* HUD System - Adaptive */
-            .hud { position: fixed; padding: 20px; z-index: 500; font-size: 8px; letter-spacing: 2px; color: #444; text-transform: uppercase; width: 100%; pointer-events: none; }
+            #cursor { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; position: fixed; pointer-events: none; z-index: 10000; }
+            #cursor-ring { width: 40px; height: 40px; border: 1px solid rgba(0, 243, 255, 0.2); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+            
+            .hud { position: fixed; padding: 30px; z-index: 500; font-size: 9px; letter-spacing: 3px; color: #444; text-transform: uppercase; }
             .t-l { top: 0; left: 0; } .t-r { top: 0; right: 0; text-align: right; }
-            .b-l { bottom: 0; left: 0; } .b-r { bottom: 0; right: 0; text-align: right; }
-            @media (min-width: 1024px) { .hud { padding: 40px; font-size: 10px; } }
-
-            /* Main Layout */
-            main { position: relative; z-index: 10; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; }
-            h1 { font-family: 'Syncopate', sans-serif; font-size: clamp(2.5rem, 12vw, 8rem); letter-spacing: -2px; line-height: 0.8; margin-bottom: 40px; text-align: center; }
             
-            /* Deck - Mobile: Scroll / Desktop: Flex */
-            .archive-deck { 
-                display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 1200px; 
-                perspective: 1000px;
-            }
-            @media (min-width: 1024px) { .archive-deck { flex-direction: row; justify-content: center; } }
+            /* SENSOR UI */
+            #video-ui { position: fixed; bottom: 20px; right: 20px; width: 240px; border: 1px solid var(--accent); z-index: 600; background: #000; padding: 10px; display: none; }
+            #webcam { width: 100%; height: auto; transform: scaleX(-1); border: 1px solid #222; }
+            .debug-info { font-size: 8px; color: var(--accent); margin-top: 5px; font-family: monospace; }
 
-            .card { 
-                background: var(--glass); border: 1px solid rgba(255,255,255,0.08); 
-                backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-                padding: 30px; transition: 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-                transform-style: preserve-3d; flex: 1;
+            /* KUCING OVERLAY */
+            #kucing-layer { 
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); 
+                width: 80%; max-width: 500px; z-index: 10002; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             }
-            .card:hover { border-color: var(--accent); background: rgba(0, 243, 255, 0.02); }
-            .card h3 { font-size: 12px; letter-spacing: 4px; margin-bottom: 15px; color: var(--accent); }
-            .card p { font-size: 10px; color: #666; line-height: 1.6; }
+            #kucing-layer.active { transform: translate(-50%, -50%) scale(1); }
+            video#cat-vid { width: 100%; border: 2px solid var(--accent); box-shadow: 0 0 50px rgba(0,243,255,0.3); }
 
-            /* Terminal Overlay */
-            #cli-layer { 
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: #000; z-index: 10001; display: none; flex-direction: column; 
-                padding: 40px 20px; font-family: 'Space Mono', monospace; 
-            }
-            @media (min-width: 1024px) { #cli-layer { padding: 80px; } }
-            #cli-output { flex-grow: 1; overflow-y: auto; color: var(--accent); font-size: 11px; margin-bottom: 20px; }
-            .term-prompt { color: var(--accent); font-weight: bold; margin-right: 10px; }
-            #cli-input { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-size: 14px; }
-
-            .blink { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: pulse 1s infinite; margin-right: 10px; }
-            @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-            
-            /* Mobile Terminal Toggle */
-            #term-toggle { 
-                position: fixed; bottom: 80px; right: 20px; z-index: 600; 
-                background: var(--accent); color: #000; border: none; padding: 12px;
-                font-family: inherit; font-size: 10px; font-weight: bold; 
-                display: block;
-            }
-            @media (min-width: 1024px) { #term-toggle { display: none; } }
+            /* CLI */
+            #cli { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10001; display: none; flex-direction: column; padding: 60px; }
+            #cli-out { flex-grow: 1; overflow-y: auto; color: var(--accent); font-size: 12px; }
+            #cli-in { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-family: inherit; margin-top: 20px; }
         </style>
     </head>
     <body>
-        <div id="cursor"></div>
-        <div id="cursor-ring"></div>
-        <div class="noise"></div>
-        <canvas id="neural-bg"></canvas>
+        <div id="cursor"></div><div id="cursor-ring"></div>
+        <div class="hud t-l">KHANSA // NEURAL LINK<br>PRECISION_MODE: ACTIVE</div>
+        <div class="hud t-r">BANDUNG_ID<br>2309_ARCHIVE</div>
 
-        <div class="hud t-l">LINK: SOVEREIGN<br>V17.0.U</div>
-        <div class="hud t-r">BANDUNG_ID<br>107.6°E -6.9°S</div>
-        <div class="hud b-l">KHANSA_NODE<br><span style="color:var(--accent)"><span class="blink"></span>SYNC_ACTIVE</span></div>
-        <div class="hud b-r">2309_ARCHIVE<br>STABLE_CONNECTION</div>
-
-        <button id="term-toggle" onclick="toggleCLI()">OPEN_TERMINAL</button>
-
-        <div id="cli-layer">
-            <div id="cli-output"><div>[ NEURAL_TERMINAL v17.0 ]</div><div>Type 'help' or 'exit'.</div></div>
-            <div style="display:flex; align-items:center;">
-                <span class="term-prompt">></span>
-                <input type="text" id="cli-input" autofocus autocomplete="off">
-            </div>
+        <div id="video-ui">
+            <video id="webcam" autoplay playsinline></video>
+            <div class="debug-info" id="db-mouth">MOUTH: NO</div>
+            <div class="debug-info" id="db-wave">WAVE: NO</div>
+            <div class="debug-info" id="db-count">GESTURE_COUNT: 0</div>
         </div>
 
-        <main>
-            <h1 onmouseenter="expand()" onmouseleave="shrink()">KHANSA</h1>
-            <div class="archive-deck">
-                <div class="card" onmousemove="tilt(event, this)" onmouseleave="resetTilt(this)">
-                    <h3>PROJECT_01</h3>
-                    <p>OBSCRA: Neural link interface. High-end textile aesthetics meet informatics precision.</p>
-                </div>
-                <div class="card" onmousemove="tilt(event, this)" onmouseleave="resetTilt(this)">
-                    <h3>PROJECT_02</h3>
-                    <p>WASTE_PROTOCOL: Environmental data architecture for localized waste management systems.</p>
-                </div>
-            </div>
+        <div id="kucing-layer">
+            <video id="cat-vid" loop muted playsinline>
+                <source src="https://test2-gold-theta.vercel.app/cat.mp4" type="video/mp4">
+            </video>
+            <audio id="cat-audio" loop src="https://test2-gold-theta.vercel.app/cat_audio.mp3"></audio>
+        </div>
+
+        <div id="cli">
+            <div id="cli-out"><div>[ OBSCRA PRECISION TERMINAL ]</div><div>Type 'kicau --start' to bind sensor.</div></div>
+            <input type="text" id="cli-in" autofocus>
+        </div>
+
+        <main style="display:flex; height:100vh; align-items:center; justify-content:center;">
+            <h1 style="font-family:'Syncopate'; font-size:10vw; letter-spacing:-10px;">KHANSA</h1>
         </main>
 
         <script>
-            const canvas = document.getElementById('neural-bg');
-            const ctx = canvas.getContext('2d');
-            const cliLayer = document.getElementById('cli-layer');
-            const cliInput = document.getElementById('cli-input');
-            const cliOutput = document.getElementById('cli-output');
-            let particles = [];
-            let mouse = { x: -1000, y: -1000 };
+            const videoElement = document.getElementById('webcam');
+            const catVid = document.getElementById('cat-vid');
+            const catAudio = document.getElementById('cat-audio');
+            const cli = document.getElementById('cli');
+            const cliIn = document.getElementById('cli-in');
+            const dbMouth = document.getElementById('db-mouth');
+            const dbWave = document.getElementById('db-wave');
+            const dbCount = document.getElementById('db-count');
 
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            let gestureCount = 0;
+            let xHistory = [];
+            const WINDOW_SIZE = 20;
+            const MOVE_THRESHOLD = 0.08;
+            const GESTURE_THRESHOLD = 8;
+            let faceLandmarks = null;
 
-            window.addEventListener('mousemove', e => {
-                mouse.x = e.clientX; mouse.y = e.clientY;
-                if (window.innerWidth >= 1024) {
-                    document.getElementById('cursor').style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)';
-                    document.getElementById('cursor-ring').style.transform = 'translate(' + (e.clientX - 20) + 'px,' + (e.clientY - 20) + 'px)';
+            // 1. Setup MediaPipe Hands
+            const hands = new Hands({locateFile: (file) => \`https://cdn.jsdelivr.net/npm/@mediapipe/hands/\${file}\`});
+            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.3 });
+            hands.onResults(onHandResults);
+
+            // 2. Setup MediaPipe FaceMesh
+            const faceMesh = new FaceMesh({locateFile: (file) => \`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/\${file}\`});
+            faceMesh.setOptions({ maxNumFaces: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.3 });
+            faceMesh.onResults(results => { faceLandmarks = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null; });
+
+            function onHandResults(results) {
+                let handNearMouth = false;
+                let handWaving = false;
+
+                if (results.multiHandLandmarks && faceLandmarks) {
+                    const mouth = faceLandmarks[13]; // Titik bibir tengah
+                    
+                    results.multiHandLandmarks.forEach((hand, index) => {
+                        const palm = hand[9]; // Middle finger MCP
+                        const dist = Math.sqrt(Math.pow(palm.x - mouth.x, 2) + Math.pow(palm.y - mouth.y, 2));
+                        
+                        if (dist < 0.15) handNearMouth = true;
+
+                        // Tracking gerakan untuk tangan kedua atau tangan yang sama
+                        xHistory.push(palm.x);
+                        if (xHistory.length > WINDOW_SIZE) xHistory.shift();
+
+                        if (xHistory.length === WINDOW_SIZE) {
+                            const movement = Math.max(...xHistory) - Math.min(...xHistory);
+                            if (movement > MOVE_THRESHOLD) handWaving = true;
+                        }
+                    });
                 }
-            });
 
-            // CLI Logic
-            function toggleCLI() {
-                cliLayer.style.display = cliLayer.style.display === 'flex' ? 'none' : 'flex';
-                if(cliLayer.style.display === 'flex') cliInput.focus();
-            }
+                dbMouth.innerText = "MOUTH: " + (handNearMouth ? "YES" : "NO");
+                dbWave.innerText = "WAVE: " + (handWaving ? "YES" : "NO");
 
-            document.addEventListener('keydown', e => {
-                if (e.key === '~' || e.key === '\`') toggleCLI();
-                if (e.key === 'Escape') cliLayer.style.display = 'none';
-            });
-
-            cliInput.addEventListener('keydown', async e => {
-                if (e.key === 'Enter') {
-                    const val = cliInput.value;
-                    const cmd = val.toLowerCase().trim();
-                    printOutput('<span class="term-prompt">></span> ' + val);
-                    cliInput.value = '';
-                    if (cmd === 'help') printOutput('WHOAMI, PROJECTS, STATUS, CLEAR, EXIT');
-                    else if (cmd === 'whoami') printOutput('NAME: KHANSA // ROLE: FULLSTACK_ARCHITECT');
-                    else if (cmd === 'exit') cliLayer.style.display = 'none';
-                    else if (cmd === 'clear') cliOutput.innerHTML = '';
-                    else if (cmd !== '') printOutput('UNKNOWN_COMMAND: ' + cmd);
-                    cliOutput.scrollTop = cliOutput.scrollHeight;
+                // Debounce Logic (Mirip Python Anda)
+                if (handNearMouth && handWaving) {
+                    gestureCount = Math.min(gestureCount + 2, GESTURE_THRESHOLD);
+                } else {
+                    gestureCount = Math.max(gestureCount - 1, 0);
                 }
-            });
 
-            function printOutput(t) { const d = document.createElement('div'); d.innerHTML = t; cliOutput.appendChild(d); }
+                dbCount.innerText = "GESTURE_COUNT: " + gestureCount;
 
-            // Mobile-Friendly Particles
-            class Particle {
-                constructor() {
-                    this.x = Math.random() * canvas.width;
-                    this.y = Math.random() * canvas.height;
-                    this.baseX = this.x; this.baseY = this.y;
-                    this.size = Math.random() * 1.2;
-                    this.density = (Math.random() * 20) + 1;
-                }
-                update() {
-                    let dx = mouse.x - this.x;
-                    let dy = mouse.y - this.y;
-                    let distance = Math.sqrt(dx*dx + dy*dy);
-                    if (distance < 120) {
-                        this.x -= (dx / distance) * 5;
-                        this.y -= (dy / distance) * 5;
-                    } else {
-                        if (this.x !== this.baseX) this.x -= (this.x - this.baseX) / 20;
-                        if (this.y !== this.baseY) this.y -= (this.y - this.baseY) / 20;
+                if (gestureCount >= GESTURE_THRESHOLD) {
+                    if (catVid.paused) {
+                        document.getElementById('kucing-layer').classList.add('active');
+                        catVid.play();
+                        catAudio.play();
+                    }
+                } else {
+                    if (!catVid.paused) {
+                        document.getElementById('kucing-layer').classList.remove('active');
+                        catVid.pause();
+                        catAudio.pause();
+                        catVid.currentTime = 0;
                     }
                 }
-                draw() {
-                    ctx.fillStyle = 'rgba(0, 243, 255, 0.4)';
-                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // 3. Camera Start
+            async function startKicau() {
+                document.getElementById('video-ui').style.display = 'block';
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await faceMesh.send({image: videoElement});
+                        await hands.send({image: videoElement});
+                    },
+                    width: 240, height: 180
+                });
+                camera.start();
+            }
+
+            // 4. CLI Interaction
+            cliIn.addEventListener('keydown', e => {
+                if(e.key === 'Enter') {
+                    if(cliIn.value === 'kicau --start') startKicau();
+                    if(cliIn.value === 'exit') cli.style.display = 'none';
+                    cliIn.value = '';
                 }
-            }
+            });
+            document.addEventListener('keydown', e => { if(e.key === '~') cli.style.display = 'flex'; });
 
-            function init() { particles = []; for(let i=0; i< (window.innerWidth < 768 ? 60 : 150); i++) particles.push(new Particle()); }
-            function animate() {
-                ctx.clearRect(0,0,canvas.width,canvas.height);
-                particles.forEach(p => { p.update(); p.draw(); });
-                requestAnimationFrame(animate);
-            }
-            init(); animate();
-
-            // Tilt - Desktop Only for Performance
-            function tilt(e, el) {
-                if (window.innerWidth < 1024) return;
-                const rect = el.getBoundingClientRect();
-                const dx = e.clientX - (rect.left + rect.width/2);
-                const dy = e.clientY - (rect.top + rect.height/2);
-                el.style.transform = 'rotateY('+(dx/15)+'deg) rotateX('+(-dy/15)+'deg) scale(1.02)';
-            }
-            function resetTilt(el) { el.style.transform = 'none'; }
-            function expand() { if(window.innerWidth >= 1024) document.getElementById('cursor-ring').style.transform += ' scale(1.5)'; }
-            function shrink() { if(window.innerWidth >= 1024) document.getElementById('cursor-ring').style.transform = document.getElementById('cursor-ring').style.transform.replace(' scale(1.5)', ''); }
-
-            window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; init(); });
-            window.onload = () => fetch('/sync');
+            // Cursor
+            document.addEventListener('mousemove', e => {
+                document.getElementById('cursor').style.left = e.clientX + 'px';
+                document.getElementById('cursor').style.top = e.clientY + 'px';
+                document.getElementById('cursor-ring').style.transform = \`translate(\${e.clientX - 20}px, \${e.clientY - 20}px)\`;
+            });
         </script>
     </body>
     </html>
     `);
-});
-
-app.post('/api/bot', async (req, res) => {
-    try { await bot.handleUpdate(req.body); res.status(200).send('OK'); } catch (e) { res.status(500).send('ERR'); }
 });
 
 module.exports = app;
