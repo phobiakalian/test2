@@ -1,54 +1,77 @@
 const express = require('express');
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 
 const app = express();
 app.use(express.json());
 
+// Inisialisasi Bot & Konfigurasi
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_CHAT_ID = process.env.MY_CHAT_ID;
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
-let stealthMode = false;
+let pendingTransmissions = {};
 
-// --- KONTROL BOT ---
-bot.command('stealth_on', (ctx) => {
-    if (ctx.chat.id.toString() === MY_CHAT_ID) {
-        stealthMode = true;
-        ctx.reply('⚠️ OBSCRA STATUS: UNDER CLOAK (404 Mode Active)');
-    }
-});
-
-bot.command('stealth_off', (ctx) => {
-    if (ctx.chat.id.toString() === MY_CHAT_ID) {
-        stealthMode = false;
-        ctx.reply('🌐 OBSCRA STATUS: VISIBLE (Public Mode Active)');
-    }
-});
-
-// --- INTELIJEN REPORT ---
-const sendIntelReport = async (req) => {
-    if (!MY_CHAT_ID) return;
+// --- API: TRANSMISSION RECEIVER ---
+app.post('/api/confess', async (req, res) => {
+    const { message, to } = req.body;
     const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress).split(',')[0];
-    const ref = req.headers['referer'] || 'Direct Access';
-    const time = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-    
-    let geo = "Unknown Location";
-    try {
-        const res = await axios.get(`http://ip-api.com/json/${ip}?fields=status,city,country`);
-        if (res.data.status === 'success') geo = `${res.data.city}, ${res.data.country}`;
-    } catch (e) {}
+    const transId = Math.floor(100000 + Math.random() * 900000); // 6 Digit Unique ID
 
-    const msg = `🌑 *OBSCRA INTEL*\nStatus: ${stealthMode ? 'STEALTH' : 'VISIT'}\nIP: \`${ip}\`\nLoc: ${geo}\nRef: \`${ref}\`\nTime: ${time}`;
-    bot.telegram.sendMessage(MY_CHAT_ID, msg, { parse_mode: 'Markdown' }).catch(() => {});
-};
-
-// --- FRONTEND DESIGN: LUXE EDITION ---
-app.get('/', async (req, res) => {
-    await sendIntelReport(req);
-    if (stealthMode) {
-        return res.status(404).send('<title>404 Not Found</title><body style="font-family:sans-serif;padding:50px"><h1>404 Not Found</h1><hr>Apache/2.4.41</body>');
+    // Validasi Minimalis namun Tegas
+    if (!message || message.length < 5) {
+        return res.status(400).json({ error: 'SYS.ERROR: MSG_TOO_SHORT' });
     }
 
+    try {
+        // Simpan data ke dalam memory sementara
+        pendingTransmissions[transId] = { to, message, ip, time: new Date() };
+        
+        const adminMsg = `🛡️ *INCOMING TRANSMISSION [${transId}]*\n\n` +
+                         `*To:* ${to || 'Unknown Entity'}\n` +
+                         `*Content:* "${message}"\n\n` +
+                         `📍 *Source:* \`${ip}\`\n` +
+                         `⏳ *Status:* Awaiting Manual Override...`;
+        
+        await bot.telegram.sendMessage(MY_CHAT_ID, adminMsg, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback('✅ AUTHORIZE', `auth_${transId}`), 
+                 Markup.button.callback('❌ TERMINATE', `term_${transId}`)]
+            ])
+        });
+
+        res.status(200).json({ success: true, id: transId });
+    } catch (error) {
+        res.status(500).json({ error: 'SYS.FAULT: TRANSMISSION_FAILED' });
+    }
+});
+
+// --- BOT HANDLER: AUTHORIZATION PROTOCOL ---
+bot.on('callback_query', async (ctx) => {
+    const [action, id] = ctx.callbackQuery.data.split('_');
+    const data = pendingTransmissions[id];
+
+    if (!data) return ctx.answerCbQuery('ERROR: ID_NOT_FOUND_OR_EXPIRED');
+
+    if (action === 'auth') {
+        const channelMsg = `🌑 *OBSCRA MENFESS #${id}*\n\n*To:* ${data.to || 'Anyone'}\n*Message:* \n"${data.message}"\n\n───\n_Neural Link Verified_`;
+        
+        try {
+            await bot.telegram.sendMessage(CHANNEL_ID, channelMsg, { parse_mode: 'Markdown' });
+            await ctx.editMessageText(`✅ *TRANSMISSION #${id} PUBLISHED*`);
+        } catch (e) {
+            await ctx.answerCbQuery('CHANNEL_POST_ERROR');
+        }
+    } else {
+        await ctx.editMessageText(`❌ *TRANSMISSION #${id} DELETED*`);
+    }
+    
+    delete pendingTransmissions[id];
+});
+
+
+app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.send(`
     <!DOCTYPE html>
@@ -56,97 +79,96 @@ app.get('/', async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>OBSCRA</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;700&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
+        <title>OBSCRA | Interface</title>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;400;700&family=JetBrains+Mono:wght@100&display=swap" rel="stylesheet">
         <style>
-            :root { --bg: #0a0a0a; --fg: #ffffff; --accent: #666; }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-                background: var(--bg); color: var(--fg); 
-                font-family: 'Inter', sans-serif; overflow: hidden;
-                height: 100vh; display: flex; flex-direction: column;
-                justify-content: center; align-items: center;
+            :root { --bg: #050505; --accent: #ffffff; --border: rgba(255,255,255,0.1); }
+            * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+            body, html { background: var(--bg); color: var(--accent); font-family: 'Plus Jakarta Sans', sans-serif; height: 100vh; overflow: hidden; }
+            
+            #cursor { 
+                width: 20px; height: 20px; border: 1px solid var(--accent); 
+                border-radius: 50%; position: fixed; pointer-events: none; 
+                z-index: 9999; transition: transform 0.1s ease; mix-blend-mode: difference;
             }
 
-            /* Grain Overlay */
-            .noise { position: fixed; top:0; left:0; width:100%; height:100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.04; pointer-events: none; z-index: 10; }
-
-            /* Coordinates Tracker */
-            #coords { position: fixed; top: 30px; left: 30px; font-size: 10px; letter-spacing: 3px; color: var(--accent); z-index: 20; }
-
-            /* Main Title with Cipher Animation */
-            .hero-title { 
-                font-size: clamp(2rem, 15vw, 8rem); font-weight: 700; 
-                letter-spacing: -0.05em; margin: 0; cursor: default;
-                transition: transform 0.5s cubic-bezier(0.2, 0, 0.2, 1);
-            }
-            .hero-title:hover { transform: skewX(-10deg) scale(1.02); }
-
-            /* Professional Menu */
-            .nav-container { position: fixed; bottom: 50px; display: flex; gap: 50px; z-index: 20; }
-            .nav-item { 
-                font-size: 11px; text-transform: uppercase; letter-spacing: 5px; 
-                color: var(--accent); cursor: pointer; transition: 0.3s;
-                text-decoration: none;
-            }
-            .nav-item:hover { color: var(--fg); text-shadow: 0 0 10px rgba(255,255,255,0.5); }
-
-            /* Tagline */
-            .tagline { 
-                font-family: 'Playfair Display', serif; font-style: italic;
-                font-size: 1.2rem; color: var(--accent); margin-top: -10px;
-                opacity: 0; animation: fadeIn 2s 1s forwards;
+            .grid-bg {
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                                  linear-gradient(90deg, var(--border) 1px, transparent 1px);
+                background-size: 50px 50px;
+                mask-image: radial-gradient(circle at center, black, transparent 80%);
+                z-index: 1; opacity: 0.3;
             }
 
-            @keyframes fadeIn { to { opacity: 1; } }
+            .container { position: relative; z-index: 10; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+            
+            .glass-card {
+                width: 90%; max-width: 450px; padding: 50px;
+                background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(30px);
+                border: 1px solid var(--border); border-radius: 20px;
+                box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+                animation: slideUp 1s ease forwards;
+            }
+
+            h1 { font-weight: 200; letter-spacing: 15px; text-align: center; margin-bottom: 40px; font-size: 1.2rem; opacity: 0.8; }
+            .field { margin-bottom: 30px; }
+            label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 2px; display: block; margin-bottom: 10px; }
+            input, textarea { width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border); padding: 12px 0; color: #fff; font-family: inherit; outline: none; transition: 0.4s; }
+            input:focus, textarea:focus { border-bottom-color: #fff; }
+
+            button {
+                width: 100%; background: #fff; color: #000; border: none; padding: 20px; 
+                font-family: inherit; font-weight: 700; text-transform: uppercase; 
+                letter-spacing: 5px; font-size: 0.7rem; border-radius: 4px; margin-top: 20px;
+                transition: 0.3s;
+            }
+            button:hover { background: #000; color: #fff; border: 1px solid #fff; }
+            
+            #status { margin-top: 30px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #333; text-align: center; }
+            
+            @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+            .noise { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.05; pointer-events: none; z-index: 100; }
         </style>
     </head>
     <body>
+        <div id="cursor"></div>
         <div class="noise"></div>
-        <div id="coords">X: 000 / Y: 000</div>
-
-        <h1 class="hero-title" data-value="OBSCRA">OBSCRA</h1>
-        <p class="tagline">The art of silence.</p>
-
-        <nav class="nav-container">
-            <a class="nav-item" data-value="COLLECTIONS">Collections</a>
-            <a class="nav-item" data-value="ARCHIVE">Archive</a>
-            <a class="nav-item" data-value="ABOUT">About</a>
-        </nav>
-
+        <div class="grid-bg"></div>
+        <div class="container">
+            <div class="glass-card">
+                <h1>OBSCRA</h1>
+                <div class="field"><label>// RECIPIENT</label><input type="text" id="to" placeholder="ID.000" onmouseenter="grow()" onmouseleave="shrink()"></div>
+                <div class="field"><label>// MESSAGE</label><textarea id="msg" rows="4" placeholder="TYPE_MESSAGE..." onmouseenter="grow()" onmouseleave="shrink()"></textarea></div>
+                <button onclick="send()" onmouseenter="grow()" onmouseleave="shrink()">Run Transmission</button>
+                <div id="status">SYS.AWAITING_INPUT</div>
+            </div>
+        </div>
         <script>
-            // Coordinates Logic
-            document.addEventListener('mousemove', (e) => {
-                const x = e.clientX.toString().padStart(3, '0');
-                const y = e.clientY.toString().padStart(3, '0');
-                document.getElementById('coords').innerText = "LAT: " + x + " / LONG: " + y;
+            const cursor = document.getElementById('cursor');
+            document.addEventListener('mousemove', e => {
+                cursor.style.left = e.clientX - 10 + 'px';
+                cursor.style.top = e.clientY - 10 + 'px';
             });
+            function grow() { cursor.style.transform = 'scale(2.5)'; cursor.style.background = 'rgba(255,255,255,0.1)'; }
+            function shrink() { cursor.style.transform = 'scale(1)'; cursor.style.background = 'transparent'; }
 
-            // Cipher Effect Logic
-            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            const cipherEffect = (element) => {
-                let iteration = 0;
-                const originalText = element.dataset.value;
-                const interval = setInterval(() => {
-                    element.innerText = element.innerText
-                        .split("")
-                        .map((letter, index) => {
-                            if(index < iteration) return originalText[index];
-                            return letters[Math.floor(Math.random() * 26)]
-                        })
-                        .join("");
-                    if(iteration >= originalText.length) clearInterval(interval);
-                    iteration += 1 / 3;
-                }, 30);
-            };
-
-            // Apply Cipher to Title on Load
-            window.onload = () => cipherEffect(document.querySelector('.hero-title'));
-
-            // Apply Cipher to Nav Items on Hover
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.onmouseover = event => cipherEffect(event.target);
-            });
+            async function send() {
+                const st = document.getElementById('status');
+                st.innerText = "SYS.TRANSMITTING...";
+                try {
+                    const res = await fetch('/api/confess', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ to: document.getElementById('to').value, message: document.getElementById('msg').value })
+                    });
+                    const d = await res.json();
+                    if(res.ok) {
+                        st.innerText = "SUCCESS: ID_" + d.id;
+                        document.getElementById('msg').value = "";
+                    } else { st.innerText = "ERROR: " + d.error; }
+                } catch(e) { st.innerText = "SYS.CRITICAL_FAULT"; }
+            }
         </script>
     </body>
     </html>
